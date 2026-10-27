@@ -16,23 +16,33 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup MSVC x64 Environment
+      - name: Setup MSVC x64 Environment (VS 2022 / VS 18+)
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      - name: Configure CMake (Windows x64 Release)
+      - name: Configure CMake (Windows x64 Release via Ninja + MSVC cl.exe)
         run: |
-          cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl
 
       - name: Build VST3 & Standalone
         run: |
           cmake --build build --config Release --parallel 4
 
       - name: Bundle Factory IRs with Artifact
+        shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist_win/IRs
-          Copy-Item -Path "build/TheNoizzPassage_artefacts/Release/VST3/THE NOIZZ PASSAGE.vst3" -Destination "dist_win/" -Recurse
+          New-Item -ItemType Directory -Force -Path dist_win/IRs | Out-Null
+          $vst3 = Get-ChildItem -Path build -Directory -Filter "THE NOIZZ PASSAGE.vst3" -Recurse | Select-Object -First 1
+          if ($null -eq $vst3) {
+            Write-Error "Could not locate built THE NOIZZ PASSAGE.vst3 bundle"
+            exit 1
+          }
+          Copy-Item -Path $vst3.FullName -Destination "dist_win/" -Recurse
+          $exe = Get-ChildItem -Path build -File -Filter "THE NOIZZ PASSAGE.exe" -Recurse | Select-Object -First 1
+          if ($null -ne $exe) {
+            Copy-Item -Path $exe.FullName -Destination "dist_win/"
+          }
           Copy-Item -Path "IRs/*.wav" -Destination "dist_win/IRs/"
 
       - name: Upload Windows x64 VST3 Artifact
@@ -59,8 +69,10 @@ jobs:
       - name: Bundle macOS VST3, AU & Factory IRs
         run: |
           mkdir -p dist_mac/VST3 dist_mac/AU dist_mac/IRs
-          cp -R "build/TheNoizzPassage_artefacts/Release/VST3/THE NOIZZ PASSAGE.vst3" dist_mac/VST3/
-          cp -R "build/TheNoizzPassage_artefacts/Release/AU/THE NOIZZ PASSAGE.component" dist_mac/AU/
+          VST3_PATH=$(find build -name "THE NOIZZ PASSAGE.vst3" -type d | head -n 1)
+          AU_PATH=$(find build -name "THE NOIZZ PASSAGE.component" -type d | head -n 1)
+          cp -R "$VST3_PATH" dist_mac/VST3/
+          cp -R "$AU_PATH" dist_mac/AU/
           cp IRs/*.wav dist_mac/IRs/
 
       - name: Upload macOS Universal VST3 & AU Artifact
@@ -68,4 +80,3 @@ jobs:
         with:
           name: THE-NOIZZ-PASSAGE-macOS-Universal-VST3-AU
           path: dist_mac/
-
