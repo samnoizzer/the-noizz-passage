@@ -1,1 +1,71 @@
+name: Build THE NOIZZ PASSAGE (VST3 & AU)
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows-x64:
+    name: Windows x64 (VST3 & Standalone)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC x64 Environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure CMake (Windows x64 Release)
+        run: |
+          cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3 & Standalone
+        run: |
+          cmake --build build --config Release --parallel 4
+
+      - name: Bundle Factory IRs with Artifact
+        run: |
+          New-Item -ItemType Directory -Force -Path dist_win/IRs
+          Copy-Item -Path "build/TheNoizzPassage_artefacts/Release/VST3/THE NOIZZ PASSAGE.vst3" -Destination "dist_win/" -Recurse
+          Copy-Item -Path "IRs/*.wav" -Destination "dist_win/IRs/"
+
+      - name: Upload Windows x64 VST3 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: THE-NOIZZ-PASSAGE-Windows-x64-VST3
+          path: dist_win/
+
+  build-macos-universal:
+    name: macOS Universal (VST3 & AU)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure CMake (macOS Universal x86_64 + arm64)
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+
+      - name: Build VST3 & AU
+        run: |
+          cmake --build build --config Release --parallel 4
+
+      - name: Bundle macOS VST3, AU & Factory IRs
+        run: |
+          mkdir -p dist_mac/VST3 dist_mac/AU dist_mac/IRs
+          cp -R "build/TheNoizzPassage_artefacts/Release/VST3/THE NOIZZ PASSAGE.vst3" dist_mac/VST3/
+          cp -R "build/TheNoizzPassage_artefacts/Release/AU/THE NOIZZ PASSAGE.component" dist_mac/AU/
+          cp IRs/*.wav dist_mac/IRs/
+
+      - name: Upload macOS Universal VST3 & AU Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: THE-NOIZZ-PASSAGE-macOS-Universal-VST3-AU
+          path: dist_mac/
 
